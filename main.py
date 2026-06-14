@@ -130,7 +130,9 @@ class DictationApp:
             time.sleep(0.05) 
 
             kbd.send('ctrl+v')
-            time.sleep(0.1)
+            
+            # Увеличенный тайминг, чтобы тяжелые программы (Word) успели "прожевать" вставку
+            time.sleep(0.15) 
 
             if old_clipboard:
                 pyperclip.copy(old_clipboard)
@@ -151,18 +153,35 @@ if __name__ == "__main__":
         sys.exit(1)
 
     while True:
-        # ЗАЩИТА 5: Броня главного цикла
+        # ЗАЩИТА 5: Броня главного цикла и Watchdog
         try:
+            loop_start = time.time()
+
             if kbd.is_pressed('ctrl') and kbd.is_pressed(41):
                 app.start_recording()
+                record_start = time.time()
                 
                 while kbd.is_pressed('ctrl') and kbd.is_pressed(41):
                     time.sleep(0.05)
                     
+                    # ЗАЩИТА ОТ ЗАЛИПАНИЯ (максимум 3 минуты записи)
+                    if time.time() - record_start > 180:
+                        print("[WATCHDOG] Превышен лимит записи (3 мин). Принудительный стоп.")
+                        break 
+                        
                 app.stop_recording()
                 
             time.sleep(0.05)
             
+            # ЗАЩИТА ОТ СНА (Если цикл спал больше 3 секунд)
+            if time.time() - loop_start > 3.0:
+                print("[WATCHDOG] Обнаружен выход из режима сна. Сброс хуков...")
+                kbd.unhook_all()
+            
         except Exception as e:
             print(f"[СИСТЕМНАЯ ОШИБКА] Сбой в главном цикле: {e}")
-            time.sleep(1) # Ждем секунду, чтобы лог не спамил, и продолжаем работать
+            try:
+                kbd.unhook_all() # Освобождаем клавиатуру при жестком краше цикла
+            except:
+                pass
+            time.sleep(1) # Ждем секунду, чтобы избежать спама в консоль, и продолжаем
